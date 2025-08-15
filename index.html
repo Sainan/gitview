@@ -42,16 +42,22 @@
   <script>
     const repo = {};
     window.onhashchange = () => {
-      console.log("onhashchange");
       const params = new URLSearchParams(location.hash.replace("#", ""));
+
       if (!params.has("repo")) {
         params.set("repo", "https://ipfs.io/ipns/k51qzi5uqu5dly54t5zpzvguulvaq16fdxn75t8icsoeyprjtu4ixg1dte14yn");
       }
       params.set("repo", params.get("repo").replace(/\/+$/, ""));
       document.getElementById("repo-url").value = params.get("repo");
+
+      /*if (!params.has("path")) {
+        params.set("path", "");
+      }*/
+
       if (location.href != ("#" + params.toString())) {
         history.replaceState({}, "", "#" + params.toString());
       }
+
       if (params.get("repo") != repo.url) {
         document.getElementById("latest-author").textContent = "Loading...";
         document.getElementById("latest-message").innerHTML = "";
@@ -74,24 +80,79 @@
             }
             return refs;
           });
-        Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
-          console.log({ refs, default_ref });
-          checkoutCommit(refs[default_ref]);
-        }).catch(e => {
-          document.getElementById("latest-author").textContent = e;
-        });
+        if (repo.default_ref instanceof Promise || repo.refs instanceof Promise) {
+          Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
+            repo.default_ref = default_ref;
+            repo.refs = refs;
+            window.onhashchange();
+          }).catch(e => {
+            document.getElementById("latest-author").textContent = e;
+          });
+        }
       }
-      if (params.has("file") && params.has("blob")) {
-        const obj = getRawObject(params.get("blob"));
-        document.getElementById("file-card").classList.remove("d-none");
-        document.getElementById("file-hash").textContent = params.get("blob");
-        document.getElementById("file-name").textContent = params.get("file");
+      if (!(repo.default_ref instanceof Promise) && !(repo.refs instanceof Promise)) {
+        const commit_hash = repo.refs[repo.default_ref];
+        document.getElementById("commit-hash").textContent = commit_hash;
+        let obj = getRawObject(commit_hash);
         if (obj instanceof Promise) {
-          document.getElementById("file-data").textContent = "Loading...";
           obj.then(window.onhashchange);
         }
         else {
-          document.getElementById("file-data").textContent = parseBlob(obj);
+          const commit = parseCommit(obj);
+          document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
+          document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
+          obj = getRawObject(parseCommit(obj).tree);
+          if (obj instanceof Promise) {
+            obj.then(window.onhashchange);
+          }
+          else {
+            const choices = (params.get("path") ?? "").split("/");
+            let base_path = "";
+            let file;
+            for (const choice of choices) {
+              if (!choice) {
+                continue;
+              }
+              const entry = parseTree(obj).find(x => x.name == choice);
+              if (!entry) {
+                params.set("path", "");
+                history.replaceState({}, "", "#" + params.toString());
+                window.onhashchange();
+                return;
+              }
+              if (entry.mode != "40000") {
+                file = entry;
+                break;
+              }
+              base_path += "/" + entry.name;
+              obj = getRawObject(entry.hash);
+              if (obj instanceof Promise) {
+                document.getElementById("filelist").innerHTML = "Loading...";
+                document.getElementById("file-card").classList.add("d-none");
+                obj.then(window.onhashchange);
+                break;
+              }
+            }
+            if (!(obj instanceof Promise)) {
+              checkoutTree(parseTree(obj), base_path);
+              if (file) {
+                document.getElementById("file-card").classList.remove("d-none");
+                document.getElementById("file-name").textContent = file.name;
+                document.getElementById("file-hash").textContent = file.hash;
+                obj = getRawObject(file.hash);
+                if (obj instanceof Promise) {
+                  document.getElementById("file-data").textContent = "Loading...";
+                  obj.then(window.onhashchange);
+                }
+                else {
+                  document.getElementById("file-data").textContent = parseBlob(obj);
+                }
+              }
+              else {
+                document.getElementById("file-card").classList.add("d-none");
+              }
+            }
+          }
         }
       }
     };
@@ -123,24 +184,34 @@
       return pendingObjects[hash];
     }
 
-    async function checkoutCommit(hash) {
-      document.getElementById("commit-hash").textContent = hash;
-      const commit = parseCommit(await getRawObject(hash));
-      document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
-      document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
-      checkoutTree(commit.tree);
-    }
-
-    async function checkoutTree(hash) {
-      const tree = parseTree(await getRawObject(hash));
+    function checkoutTree(tree, base_path) {
       document.getElementById("filelist").innerHTML = "";
+
+      if (base_path) {
+        const tr = document.createElement("tr");
+        {
+          const td = document.createElement("td");
+          td.setAttribute("colspan", 2);
+          {
+            const a = document.createElement("a");
+            const arr = base_path.split("/");
+            arr.pop();
+            a.href = "#repo=" + encodeURIComponent(repo.url) + "&path=" + encodeURIComponent(arr.join("/"));
+            a.textContent = "..";
+            td.appendChild(a);
+          }
+          tr.appendChild(td);
+        }
+        document.getElementById("filelist").appendChild(tr);
+      }
+
       for (const file of tree) {
         const tr = document.createElement("tr");
         {
           const td = document.createElement("td");
           {
             const a = document.createElement("a");
-            a.href = "#repo=" + encodeURIComponent(repo.url) + "&file=" + encodeURIComponent(file.name) + "&blob=" + file.hash;
+            a.href = "#repo=" + encodeURIComponent(repo.url) + "&path=" + encodeURIComponent(base_path + "/" + file.name);
             a.textContent = file.name;
             td.appendChild(a);
           }
