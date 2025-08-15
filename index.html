@@ -1,5 +1,5 @@
 <!doctype html>
-<html data-bs-theme="dark">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -21,13 +21,17 @@
     <div class="input-group mb-3">
       <input id="repo-url" type="text" class="form-control w-auto" />
       <span class="input-group-text">@</span>
-      <input id="ptr" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
+      <input id="ref" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
     </div>
     <div class="card overflow-hidden mb-3">
       <div class="card-header d-flex align-items-center">
         <b class="me-2" id="latest-author">Loading...</b>
         <span id="latest-message"></span>
-        <code id="commit-hash" class="text-truncate ms-auto"></code>
+        <div class="ms-auto">
+          <button id="next-btn" class="btn btn-outline-light btn-sm font-monospace d-none" title="Subsequent commit">&lt;</button>
+          <code id="commit-hash" class="text-truncate"></code>
+          <button id="prev-btn" class="btn btn-outline-light btn-sm font-monospace d-none" title="Previous commit">&gt;</button>
+        </div>
       </div>
       <div>
         <table class="table table-hover table-borderless mb-0">
@@ -46,7 +50,7 @@
   <datalist id="refs-datalist"></datalist>
   <script>
     const repo = {};
-    window.onhashchange = () => {
+    window.onhashchange = (e) => {
       const params = new URLSearchParams(location.hash.replace("#", ""));
 
       if (!params.has("repo")) {
@@ -58,6 +62,9 @@
       /*if (!params.has("path")) {
         params.set("path", "");
       }*/
+      if (e?.type == "hashchange") {
+        document.getElementById("ref").value = params.get("ref");
+      }
 
       if (location.href != ("#" + params.toString())) {
         history.replaceState({}, "", "#" + params.toString());
@@ -111,11 +118,14 @@
         }
       }
       if (!(repo.default_ref instanceof Promise) && !(repo.refs instanceof Promise)) {
-        let commit_hash = params.get("ptr");
-        if (commit_hash?.length != 40) {
-          commit_hash = repo.refs[params.get("ptr")] ?? repo.refs[repo.default_ref];
+        let ref_commit_hash = params.get("ref");
+        if (ref_commit_hash?.length != 40) {
+          ref_commit_hash = repo.refs[params.get("ref")] ?? repo.refs[repo.default_ref];
         }
+        const commit_hash = params.get("commit") ?? ref_commit_hash;
         document.getElementById("commit-hash").textContent = commit_hash;
+        document.getElementById("next-btn").classList.add("d-none");
+        document.getElementById("prev-btn").classList.add("d-none");
         let obj = getRawObject(commit_hash);
         if (obj instanceof Promise) {
           document.getElementById("latest-author").textContent = "Loading...";
@@ -127,6 +137,27 @@
           const commit = parseCommit(obj);
           document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
           document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
+
+          if (ref_commit_hash != commit_hash) {
+            let path_obj = getRawObject(ref_commit_hash);
+            while (path_obj && !(path_obj instanceof Promise) && parseCommit(path_obj).parent != commit_hash) {
+              ref_commit_hash = parseCommit(path_obj).parent;
+              path_obj = getRawObject(ref_commit_hash);
+            }
+            if (path_obj instanceof Promise) {
+              path_obj.then(window.onhashchange);
+            }
+            else {
+              repo.next_commit = ref_commit_hash;
+            document.getElementById("next-btn").classList.remove("d-none");
+            }
+          }
+
+          if (commit.parent) {
+            repo.prev_commit = commit.parent;
+            document.getElementById("prev-btn").classList.remove("d-none");
+          }
+
           obj = getRawObject(parseCommit(obj).tree);
           if (obj instanceof Promise) {
             obj.then(window.onhashchange);
@@ -187,8 +218,18 @@
       location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value);
     };
 
-    document.getElementById("ptr").onchange = () => {
-      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ptr=" + document.getElementById("ptr").value;
+    document.getElementById("ref").onchange = () => {
+      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value;
+      window.onhashchange();
+    };
+
+    document.getElementById("next-btn").onclick = () => {
+      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.next_commit;
+      window.onhashchange();
+    };
+
+    document.getElementById("prev-btn").onclick = () => {
+      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.prev_commit;
       window.onhashchange();
     };
 
