@@ -128,8 +128,24 @@
         }
         repo.commit_hash = params.get("commit") ?? ref_commit_hash;
         document.getElementById("commit-hash").textContent = repo.commit_hash;
-        document.getElementById("next-btn").classList.add("d-none");
         document.getElementById("prev-btn").classList.add("d-none");
+
+        document.getElementById("next-btn").classList.add("d-none");
+        if (ref_commit_hash != repo.commit_hash) {
+          let path_obj = getRawObject(ref_commit_hash);
+          while (path_obj && !(path_obj instanceof Promise) && parseCommit(path_obj).parent != repo.commit_hash) {
+            ref_commit_hash = parseCommit(path_obj).parent;
+            path_obj = getRawObject(ref_commit_hash);
+          }
+          if (path_obj instanceof Promise) {
+            path_obj.then(window.onhashchange);
+          }
+          else {
+            repo.next_commit = ref_commit_hash;
+            document.getElementById("next-btn").classList.remove("d-none");
+          }
+        }
+
         let obj = getRawObject(repo.commit_hash);
         if (obj instanceof Promise) {
           document.getElementById("latest-author").textContent = "Loading...";
@@ -141,21 +157,6 @@
           const commit = parseCommit(obj);
           document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
           document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
-
-          if (ref_commit_hash != repo.commit_hash) {
-            let path_obj = getRawObject(ref_commit_hash);
-            while (path_obj && !(path_obj instanceof Promise) && parseCommit(path_obj).parent != repo.commit_hash) {
-              ref_commit_hash = parseCommit(path_obj).parent;
-              path_obj = getRawObject(ref_commit_hash);
-            }
-            if (path_obj instanceof Promise) {
-              path_obj.then(window.onhashchange);
-            }
-            else {
-              repo.next_commit = ref_commit_hash;
-              document.getElementById("next-btn").classList.remove("d-none");
-            }
-          }
 
           if (commit.parent) {
             repo.prev_commit = commit.parent;
