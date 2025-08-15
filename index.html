@@ -1,0 +1,304 @@
+<!doctype html>
+<html data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+  <style>
+    #filelist tr:not(:last-child) {
+      border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    #filelist td {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  </style>
+  <script><!-- https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer --></script>
+</head>
+<body>
+  <div class="container mt-3">
+    <input id="repo-url" type="text" class="form-control mb-3" />
+    <div class="card overflow-hidden mb-3">
+      <div class="card-header d-flex align-items-center">
+        <b class="me-2" id="latest-author">Loading...</b>
+        <span id="latest-message"></span>
+        <code id="commit-hash" class="text-truncate ms-auto"></code>
+      </div>
+      <div>
+        <table class="table table-hover table-borderless mb-0">
+          <tbody id="filelist"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="file-card" class="card mb-3 d-none">
+      <div class="card-header d-flex">
+        <span id="file-name"></span>
+        <code id="file-hash" class="ms-auto"></code>
+      </div>
+      <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
+    </div>
+  </div>
+  <script>
+    const repo = {};
+    window.onhashchange = () => {
+      console.log("onhashchange");
+      const params = new URLSearchParams(location.hash.replace("#", ""));
+      if (!params.has("repo")) {
+        params.set("repo", "https://ipfs.io/ipns/k51qzi5uqu5dly54t5zpzvguulvaq16fdxn75t8icsoeyprjtu4ixg1dte14yn");
+      }
+      params.set("repo", params.get("repo").replace(/\/+$/, ""));
+      document.getElementById("repo-url").value = params.get("repo");
+      if (location.href != ("#" + params.toString())) {
+        history.replaceState({}, "", "#" + params.toString());
+      }
+      if (params.get("repo") != repo.url) {
+        document.getElementById("latest-author").textContent = "Loading...";
+        document.getElementById("latest-message").innerHTML = "";
+        document.getElementById("commit-hash").innerHTML = "";
+        document.getElementById("filelist").innerHTML = "";
+        document.getElementById("file-card").classList.add("d-none");
+        repo.url = params.get("repo");
+        repo.default_ref = fetch(repo.url + "/HEAD")
+          .then((x) => x.text())
+          .then((x) => x.substr(5).trim());
+        repo.refs = fetch(repo.url + "/info/refs")
+          .then((x) => x.text())
+          .then((x) => {
+            const refs = {};
+            for (const line of x.split("\n")) {
+              const [hash, name] = line.split("\t");
+              if (name) {
+                refs[name.trim()] = hash;
+              }
+            }
+            return refs;
+          });
+        Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
+          console.log({ refs, default_ref });
+          checkoutCommit(refs[default_ref]);
+        }).catch(e => {
+          document.getElementById("latest-author").textContent = e;
+        });
+      }
+      if (params.has("file") && params.has("blob")) {
+        const obj = getRawObject(params.get("blob"));
+        document.getElementById("file-card").classList.remove("d-none");
+        document.getElementById("file-hash").textContent = params.get("blob");
+        document.getElementById("file-name").textContent = params.get("file");
+        if (obj instanceof Promise) {
+          document.getElementById("file-data").textContent = "Loading...";
+          obj.then(window.onhashchange);
+        }
+        else {
+          document.getElementById("file-data").textContent = parseBlob(obj);
+        }
+      }
+    };
+
+    document.getElementById("repo-url").onchange = () => {
+      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value);
+    };
+
+    const rawObjects = {};
+    const pendingObjects = {};
+    function getRawObject(hash) {
+      if (hash in rawObjects) {
+        return rawObjects[hash];
+      }
+      if (!(hash in pendingObjects)) {
+        pendingObjects[hash] = (async () => {
+          const response = await fetch(
+            repo.url + "/objects/" + hash.substr(0, 2) + "/" + hash.substr(2),
+          );
+          rawObjects[hash] = new Uint8Array(
+            await new Response(
+              response.body.pipeThrough(new DecompressionStream("deflate")),
+            ).arrayBuffer(),
+          );
+          delete pendingObjects[hash];
+          return rawObjects[hash];
+        })();
+      }
+      return pendingObjects[hash];
+    }
+
+    async function checkoutCommit(hash) {
+      document.getElementById("commit-hash").textContent = hash;
+      const commit = parseCommit(await getRawObject(hash));
+      document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
+      document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
+      checkoutTree(commit.tree);
+    }
+
+    async function checkoutTree(hash) {
+      const tree = parseTree(await getRawObject(hash));
+      document.getElementById("filelist").innerHTML = "";
+      for (const file of tree) {
+        const tr = document.createElement("tr");
+        {
+          const td = document.createElement("td");
+          {
+            const a = document.createElement("a");
+            a.href = "#repo=" + encodeURIComponent(repo.url) + "&file=" + encodeURIComponent(file.name) + "&blob=" + file.hash;
+            a.textContent = file.name;
+            td.appendChild(a);
+          }
+          tr.appendChild(td);
+        }
+        {
+          const td = document.createElement("td");
+          td.classList = "text-end";
+          {
+            const code = document.createElement("code");
+            code.classList = "text-truncate";
+            code.textContent = file.hash;
+            td.appendChild(code);
+          }
+          tr.appendChild(td);
+        }
+        document.getElementById("filelist").appendChild(tr);
+      }
+    }
+
+    const tdUtf8 = new TextDecoder("utf-8");
+
+    function parseCommit(raw) {
+      const { type, body } = parseObjectHeader(raw);
+      console.assert(type == "commit");
+      return parseCommitBody(body);
+    }
+
+    function parseTree(raw) {
+      const { type, body } = parseObjectHeader(raw);
+      console.assert(type == "tree");
+      return parseTreeBody(body);
+    }
+
+    function parseBlob(raw) {
+      const { type, body } = parseObjectHeader(raw);
+      console.assert(type == "blob");
+      return tdUtf8.decode(body);
+    }
+
+    // AI-generated Git helpers. Would use Gitwit (https://github.com/PlutoLang/gitwit) but Pluto maybe a bit too heavy of a dependency right now.
+
+    /**
+     * Split a raw Git object into { type, size, body }.
+     * raw: Uint8Array of "<type> <size>\0<body>"
+     */
+    function parseObjectHeader(raw) {
+      let nul = 0;
+      while (nul < raw.length && raw[nul] !== 0x00) nul++;
+      if (nul === raw.length)
+        throw new Error("Invalid git object: missing NUL header separator");
+
+      const header = tdUtf8.decode(raw.subarray(0, nul)); // e.g. "commit 123"
+      const [type, sizeStr] = header.split(" ");
+      const size = Number(sizeStr);
+      const body = raw.subarray(nul + 1);
+
+      console.assert(Number.isFinite(size) && size === body.length);
+
+      return { type, size, body };
+    }
+
+    /**
+     * Convert 20 bytes at offset to a 40-hex SHA-1 string.
+     */
+    function sha1HexAt(bytes, offset) {
+      let out = "";
+      for (let i = 0; i < 20; i++) {
+        const b = bytes[offset + i];
+        out += b.toString(16).padStart(2, "0");
+      }
+      return out;
+    }
+
+    /**
+     * Binary-safe tree parser.
+     * Accepts a Uint8Array body of a 'tree' object (NOT including the "<type> <size>\0" header).
+     * Returns [{ mode, name, hash }, ...]
+     */
+    function parseTreeBody(body) {
+      const files = [];
+      let i = 0;
+
+      while (i < body.length) {
+        // mode: ASCII until space (0x20)
+        let start = i;
+        while (i < body.length && body[i] !== 0x20) i++;
+        if (i >= body.length)
+          throw new Error("Malformed tree: unterminated mode");
+        const mode = tdUtf8.decode(body.subarray(start, i));
+        i++; // skip space
+
+        // name: bytes until NUL (0x00)
+        start = i;
+        while (i < body.length && body[i] !== 0x00) i++;
+        if (i >= body.length)
+          throw new Error("Malformed tree: unterminated name");
+        const name = tdUtf8.decode(body.subarray(start, i));
+        i++; // skip NUL
+
+        // 20-byte SHA-1
+        if (i + 20 > body.length)
+          throw new Error("Malformed tree: truncated SHA-1");
+        const hash = sha1HexAt(body, i);
+        i += 20;
+
+        files.push({ mode, name, hash });
+      }
+
+      return files;
+    }
+
+    /**
+     * Commit parser: takes a Uint8Array body of a 'commit' object and returns a JS object.
+     * Decodes UTF-8 text safely.
+     */
+    function parseCommitBody(body) {
+      // Commit objects are textual: headers (ASCII/UTF-8) then "\n\n" then message.
+      // We'll parse on bytes to find the first blank line.
+      let i = 0;
+      const NL = 0x0a; // '\n'
+      let sep = -1;
+
+      // Find "\n\n"
+      for (let j = 0; j + 1 < body.length; j++) {
+        if (body[j] === NL && body[j + 1] === NL) {
+          sep = j;
+          break;
+        }
+      }
+      const commit = {};
+      if (sep === -1) {
+        // No blank line: treat entire thing as headers (rare/malformed)
+        sep = body.length - 1;
+      }
+
+      // Headers
+      const headerText = tdUtf8.decode(body.subarray(0, sep));
+      const lines = headerText.length ? headerText.split("\n") : [];
+      for (const line of lines) {
+        const idx = line.indexOf(" ");
+        if (idx > 0) {
+          const key = line.slice(0, idx);
+          const value = line.slice(idx + 1);
+          commit[key] = value;
+        }
+      }
+
+      // Message (strip trailing newlines)
+      const msgBytes =
+        sep + 2 <= body.length ? body.subarray(sep + 2) : new Uint8Array();
+      let message = tdUtf8.decode(msgBytes).replace(/\n+$/, "");
+      commit.message = message;
+
+      return commit;
+    }
+
+    window.onhashchange();
+  </script>
+</body>
+</html>
