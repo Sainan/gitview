@@ -18,7 +18,11 @@
 </head>
 <body>
   <div class="container mt-3">
-    <input id="repo-url" type="text" class="form-control mb-3" />
+    <div class="input-group mb-3">
+      <input id="repo-url" type="text" class="form-control w-auto" />
+      <span class="input-group-text">@</span>
+      <input id="ptr" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
+    </div>
     <div class="card overflow-hidden mb-3">
       <div class="card-header d-flex align-items-center">
         <b class="me-2" id="latest-author">Loading...</b>
@@ -39,6 +43,7 @@
       <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
     </div>
   </div>
+  <datalist id="refs-datalist"></datalist>
   <script>
     const repo = {};
     window.onhashchange = () => {
@@ -84,6 +89,21 @@
           Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
             repo.default_ref = default_ref;
             repo.refs = refs;
+            document.getElementById("refs-datalist").innerHTML = "";
+            /*{
+              const option = document.createElement("option");
+              option.value = "HEAD";
+              document.getElementById("refs-datalist").appendChild(option);
+            }*/
+            for (const [name, hash] of Object.entries(repo.refs)) {
+              const option = document.createElement("option");
+              option.value = name;
+              option.textContent = name;
+              if (repo.default_ref == name) {
+                option.textContent += " (default)";
+              }
+              document.getElementById("refs-datalist").appendChild(option);
+            }
             window.onhashchange();
           }).catch(e => {
             document.getElementById("latest-author").textContent = e;
@@ -91,10 +111,16 @@
         }
       }
       if (!(repo.default_ref instanceof Promise) && !(repo.refs instanceof Promise)) {
-        const commit_hash = repo.refs[repo.default_ref];
+        let commit_hash = params.get("ptr");
+        if (commit_hash?.length != 40) {
+          commit_hash = repo.refs[params.get("ptr")] ?? repo.refs[repo.default_ref];
+        }
         document.getElementById("commit-hash").textContent = commit_hash;
         let obj = getRawObject(commit_hash);
         if (obj instanceof Promise) {
+          document.getElementById("latest-author").textContent = "Loading...";
+          document.getElementById("latest-message").innerHTML = "";
+          document.getElementById("filelist").innerHTML = "";
           obj.then(window.onhashchange);
         }
         else {
@@ -127,7 +153,7 @@
               base_path += "/" + entry.name;
               obj = getRawObject(entry.hash);
               if (obj instanceof Promise) {
-                document.getElementById("filelist").innerHTML = "Loading...";
+                document.getElementById("filelist").innerHTML = "";
                 document.getElementById("file-card").classList.add("d-none");
                 obj.then(window.onhashchange);
                 break;
@@ -159,6 +185,11 @@
 
     document.getElementById("repo-url").onchange = () => {
       location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value);
+    };
+
+    document.getElementById("ptr").onchange = () => {
+      location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ptr=" + document.getElementById("ptr").value;
+      window.onhashchange();
     };
 
     const rawObjects = {};
