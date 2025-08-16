@@ -214,7 +214,7 @@
                 file = entry;
                 break;
               }
-              base_path += "/" + entry.name;
+              base_path += entry.name + "/";
               obj = getRawObject(entry.hash);
               if (obj instanceof Promise) {
                 document.getElementById("filelist").innerHTML = "";
@@ -331,6 +331,7 @@
             const a = document.createElement("a");
             const arr = base_path.split("/");
             arr.pop();
+            arr.pop();
             a.href = "#repo=" + encodeURIComponent(repo.url) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash + "&path=" + encodeURIComponent(arr.join("/"));
             a.textContent = "..";
             td.appendChild(a);
@@ -346,7 +347,7 @@
           const td = document.createElement("td");
           {
             const a = document.createElement("a");
-            a.href = "#repo=" + encodeURIComponent(repo.url) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash + "&path=" + encodeURIComponent(base_path + "/" + file.name);
+            a.href = "#repo=" + encodeURIComponent(repo.url) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash + "&path=" + encodeURIComponent(base_path + file.name);
             a.textContent = file.name;
             if (file.mode == "40000") {
               a.textContent += "/";
