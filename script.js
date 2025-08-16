@@ -37,6 +37,9 @@ window.onhashchange = (e) => {
   if (params.get("repo") != repo.url) {
     document.getElementById("latest-author").textContent = "Loading...";
     document.getElementById("latest-message").innerHTML = "";
+    document.getElementById("commit-header").classList.add("border-bottom-0");
+    document.getElementById("full-message").classList.add("d-none");
+    document.getElementById("expand-btn").classList.add("d-none");
     document.getElementById("commit-hash").innerHTML = "";
     document.getElementById("filelist").innerHTML = "";
     document.getElementById("file-card").classList.add("d-none");
@@ -113,6 +116,7 @@ window.onhashchange = (e) => {
       document.getElementById("latest-message").innerHTML = "";
       document.getElementById("commit-header").classList.add("border-bottom-0");
       document.getElementById("full-message").classList.add("d-none");
+      document.getElementById("expand-btn").classList.add("d-none");
       document.getElementById("filelist").innerHTML = "";
       document.getElementById("file-card").classList.add("d-none");
       obj.then(window.onhashchange);
