@@ -23,7 +23,6 @@
       <span class="input-group-text">@</span>
       <input id="ref" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
     </div>
-    <p id="status-text"></p>
     <div class="card overflow-hidden mb-3">
       <div class="card-header d-flex align-items-center">
         <b class="me-2" id="latest-author">Loading...</b>
@@ -48,6 +47,7 @@
       </div>
       <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
     </div>
+    <p id="status-text"></p>
   </div>
   <datalist id="refs-datalist"></datalist>
   <script src="git-parsers.js"></script>
@@ -259,8 +259,10 @@
             ).arrayBuffer(),
           );
           delete pendingObjects[hash];
+          document.getElementById("status-text").innerHTML = Object.keys(pendingObjects).length ? "Downloading " + Object.keys(pendingObjects).map(x => "<code>" + x + "</code>").join(", ") + "..." : "";
           return rawObjects[hash];
         })();
+        document.getElementById("status-text").innerHTML = "Downloading " + Object.keys(pendingObjects).map(x => "<code>" + x + "</code>").join(", ") + "...";
       }
       return pendingObjects[hash];
     }
@@ -315,21 +317,21 @@
 
     window.onhashchange();
 
+    let downloadPending = false;
     document.getElementById("dl-btn").onclick = async () => {
-      const commit_hash = repo.commit_hash;
-      const tree = await getRawObject(parseCommit(await getRawObject(commit_hash)).tree);
-      if (document.getElementById("status-text").textContent) {
+      if (downloadPending) {
         return;
       }
+      downloadPending = true;
+      const commit_hash = repo.commit_hash;
+      const tree = await getRawObject(parseCommit(await getRawObject(commit_hash)).tree);
       const files = [];
       await collectFilesForZip(files, tree, "");
-      document.getElementById("status-text").textContent = "Compressing...";
       await zipDownload(commit_hash + ".zip", files);
-      document.getElementById("status-text").textContent = "";
+      downloadPending = false;
     }
     async function collectFilesForZip(files, tree, base_path) {
       for (const file of parseTree(tree)) {
-        document.getElementById("status-text").textContent = "Downloading " + file.hash + "...";
         if (file.mode == "40000") {
           const subtree = await getRawObject(file.hash);
           await collectFilesForZip(files, subtree, base_path + file.name + "/");
