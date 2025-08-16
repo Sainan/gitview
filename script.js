@@ -1,3 +1,5 @@
+const repo = {};
+
 marked.use(markedAlert());
 marked.use(markedHighlight.markedHighlight({
   emptyLangClass: "hljs",
@@ -7,8 +9,14 @@ marked.use(markedHighlight.markedHighlight({
     return hljs.highlight(code, { language }).value;
   }
 }));
+marked.use({
+  walkTokens(token) {
+    if (["link", "image"].includes(token.type) && !/^[\w+]+:\/\//.test(token.href) && !token.href.startsWith("#")) {
+      token.href = "#repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash + "&path=" + token.href;
+    }
+  }
+});
 
-const repo = {};
 window.onhashchange = (e) => {
   const params = new URLSearchParams(location.hash.replace("#", ""));
 
