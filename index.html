@@ -16,9 +16,10 @@
       <input id="ref" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
     </div>
     <div class="card mb-3">
-      <div class="card-header d-md-flex align-items-center border-bottom-0">
+      <div id="commit-header" class="card-header d-md-flex align-items-center border-bottom-0">
         <b class="me-2" id="latest-author">Loading...</b>
         <span id="latest-message"></span>
+        <a id="expand-btn" class="ms-1 d-none" href="#" onclick="event.preventDefault();window.fullmsg=!window.fullmsg;window.onhashchange();">...</a>
         <div class="ms-auto">
           <button id="next-btn" class="btn btn-outline-light btn-sm font-monospace d-none" title="Subsequent commit">&lt;</button>
           <code id="commit-hash" class="text-truncate"></code>
@@ -27,6 +28,7 @@
           <button id="dl-btn" class="btn btn-outline-success btn-sm">Download ZIP</button>
         </div>
       </div>
+      <pre id="full-message" class="m-3 d-none"></pre>
     </div>
     <div id="file-view" class="row g-3">
       <div class="col-md-3">
@@ -40,7 +42,7 @@
         <div id="file-card" class="card mb-3 d-none">
           <div class="card-header d-flex">
             <span id="file-name"></span>
-            <span id="raw-span" class="d-none">&nbsp;(<a href="#" onclick="event.preventDefault();window.mdraw=!window.mdraw;window.onhashchange();">Raw</a>)</span>
+            <span id="raw-span" class="ms-1 d-none">(<a href="#" onclick="event.preventDefault();window.mdraw=!window.mdraw;window.onhashchange();">Raw</a>)</span>
             <code id="file-hash" class="ms-auto text-truncate"></code>
           </div>
           <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>

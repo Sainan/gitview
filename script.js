@@ -103,6 +103,8 @@ window.onhashchange = (e) => {
     if (obj instanceof Promise) {
       document.getElementById("latest-author").textContent = "Loading...";
       document.getElementById("latest-message").innerHTML = "";
+      document.getElementById("commit-header").classList.add("border-bottom-0");
+      document.getElementById("full-message").classList.add("d-none");
       document.getElementById("filelist").innerHTML = "";
       document.getElementById("file-card").classList.add("d-none");
       obj.then(window.onhashchange);
@@ -111,6 +113,22 @@ window.onhashchange = (e) => {
       const commit = parseCommit(obj);
       document.getElementById("latest-author").textContent = commit.author.split("<")[0].trim();
       document.getElementById("latest-message").textContent = commit.message.split("\n")[0].trim();
+      const isMultiline = (commit.message.indexOf("\n") != -1);
+      if (isMultiline) {
+        document.getElementById("expand-btn").classList.remove("d-none");
+      }
+      else {
+        document.getElementById("expand-btn").classList.add("d-none");
+      }
+      if (isMultiline && window.fullmsg) {
+        document.getElementById("commit-header").classList.remove("border-bottom-0");
+        document.getElementById("full-message").classList.remove("d-none");
+        document.getElementById("full-message").textContent = commit.message.split("\n").slice(1).join("\n").trim();
+      }
+      else {
+        document.getElementById("commit-header").classList.add("border-bottom-0");
+        document.getElementById("full-message").classList.add("d-none");
+      }
 
       if (commit.parent) {
         repo.prev_commit = commit.parent;
