@@ -338,6 +338,9 @@
             const a = document.createElement("a");
             a.href = "#repo=" + encodeURIComponent(repo.url) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash + "&path=" + encodeURIComponent(base_path + "/" + file.name);
             a.textContent = file.name;
+            if (file.mode == "40000") {
+              a.textContent += "/";
+            }
             td.appendChild(a);
           }
           tr.appendChild(td);
