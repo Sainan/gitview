@@ -196,7 +196,11 @@
               }
             }
             if (!(obj instanceof Promise)) {
-              checkoutTree(parseTree(obj), base_path);
+              const files = parseTree(obj);
+              checkoutTree(files, base_path);
+              if (!file) {
+                file = files.find(x => x.name == "README.md");
+              }
               if (file) {
                 document.getElementById("file-card").classList.remove("d-none");
                 document.getElementById("file-name").textContent = file.name;
