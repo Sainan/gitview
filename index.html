@@ -36,11 +36,12 @@
           <button id="next-btn" class="btn btn-outline-light btn-sm font-monospace d-none" title="Subsequent commit">&lt;</button>
           <code id="commit-hash" class="text-truncate"></code>
           <button id="prev-btn" class="btn btn-outline-light btn-sm font-monospace d-none" title="Previous commit">&gt;</button>
+          <button id="diff-btn" class="btn btn-outline-light btn-sm d-none">Diff</button>
           <button id="dl-btn" class="btn btn-outline-success btn-sm">Download ZIP</button>
         </div>
       </div>
     </div>
-    <div class="row g-3">
+    <div id="file-view" class="row g-3">
       <div class="col-md-3">
         <div class="card mb-3 overflow-hidden">
           <table class="table table-hover table-borderless mb-0">
@@ -60,6 +61,7 @@
         </div>
       </div>
     </div>
+    <div id="diff-view" class="d-none"></div>
     <p id="status-text"></p>
   </div>
   <datalist id="refs-datalist"></datalist>
@@ -69,6 +71,7 @@
   <script src="vendor/marked.js"></script>
   <script src="vendor/marked-alert.js"></script>
   <script src="vendor/marked-highlight.js"></script>
+  <script src="vendor/diff.js"></script>
   <script>
     marked.use(markedAlert());
     marked.use(markedHighlight.markedHighlight({
@@ -90,14 +93,11 @@
       params.set("repo", params.get("repo").replace(/\/+$/, ""));
       document.getElementById("repo-url").value = params.get("repo");
 
-      /*if (!params.has("path")) {
-        params.set("path", "");
-      }*/
       if (e?.type == "hashchange") {
         document.getElementById("ref").value = params.get("ref");
       }
 
-      if (location.href != ("#" + params.toString())) {
+      if (location.hash != ("#" + params.toString())) {
         history.replaceState({}, "", "#" + params.toString());
       }
 
@@ -156,6 +156,7 @@
       if (repo.commit_hash) {
         document.getElementById("commit-hash").textContent = repo.commit_hash;
         document.getElementById("prev-btn").classList.add("d-none");
+        document.getElementById("diff-btn").classList.add("d-none");
 
         document.getElementById("next-btn").classList.add("d-none");
         if (ref_commit_hash != repo.commit_hash && ref_commit_hash) {
@@ -189,86 +190,169 @@
           if (commit.parent) {
             repo.prev_commit = commit.parent;
             document.getElementById("prev-btn").classList.remove("d-none");
+            document.getElementById("diff-btn").classList.remove("d-none");
           }
 
-          obj = getRawObject(parseCommit(obj).tree);
+          const tree_hash = parseCommit(obj).tree;
+          obj = getRawObject(tree_hash);
           if (obj instanceof Promise) {
             obj.then(window.onhashchange);
           }
           else {
-            const choices = (params.get("path") ?? "").split("/");
-            let base_path = "";
-            let file;
-            for (const choice of choices) {
-              if (!choice) {
-                continue;
-              }
-              const entry = parseTree(obj).find(x => x.name == choice);
-              if (!entry) {
-                params.set("path", "");
-                history.replaceState({}, "", "#" + params.toString());
-                window.onhashchange();
-                return;
-              }
-              if (entry.mode != "40000") {
-                file = entry;
-                break;
-              }
-              base_path += entry.name + "/";
-              obj = getRawObject(entry.hash);
-              if (obj instanceof Promise) {
-                document.getElementById("filelist").innerHTML = "";
-                document.getElementById("file-card").classList.add("d-none");
-                obj.then(window.onhashchange);
-                break;
-              }
-            }
-            if (!(obj instanceof Promise)) {
-              const files = parseTree(obj);
-              checkoutTree(files, base_path);
-              if (!file) {
-                file = files.find(x => x.name == "README.md");
-              }
-              if (file) {
-                document.getElementById("file-card").classList.remove("d-none");
-                document.getElementById("file-name").textContent = file.name;
-                document.getElementById("file-hash").textContent = file.hash;
-                obj = getRawObject(file.hash);
-
-                const arr = file.name.split(".");
-                const language = arr[arr.length - 1];
-                const parsable = (language == "md") && !(obj instanceof Promise);
-                const showRaw = !parsable || window.mdraw;
-                if (parsable) {
-                  document.getElementById("raw-span").classList.remove("d-none");
-                }
-                else {
-                  document.getElementById("raw-span").classList.add("d-none");
-                }
-                if (showRaw) {
-                  document.querySelector("#raw-span a").textContent = "Parsed";
-                  document.getElementById("file-data").classList.remove("d-none");
-                  document.getElementById("file-contents").classList.add("d-none");
-                }
-                else {
-                  document.querySelector("#raw-span a").textContent = "Raw";
-                  document.getElementById("file-data").classList.add("d-none");
-                  document.getElementById("file-contents").classList.remove("d-none");
-                }
-
-                if (obj instanceof Promise) {
-                  document.getElementById("file-data").textContent = "Loading...";
-                  obj.then(window.onhashchange);
-                }
-                else if (showRaw) {
-                  document.getElementById("file-data").innerHTML = hljs.highlight(parseBlob(obj), { language: hljs.getLanguage(language) ? language: "plaintext" }).value;
-                }
-                else {
-                  document.getElementById("file-contents").innerHTML = marked.parse(parseBlob(obj));
-                }
+            if (params.has("diff")) {
+              document.getElementById("diff-btn").textContent = "Files";
+              document.getElementById("file-view").classList.add("d-none");
+              document.getElementById("diff-view").classList.remove("d-none");
+              document.getElementById("diff-view").innerHTML = "";
+              const oldCommit = getRawObject(params.get("diff"));
+              if (oldCommit instanceof Promise) {
+                oldCommit.then(window.onhashchange);
               }
               else {
-                document.getElementById("file-card").classList.add("d-none");
+                const diffdata = { "": { mode: "40000", new: tree_hash, old: parseCommit(oldCommit).tree } };
+                let pending, updated;
+                do {
+                  updated = false;
+                  for (const [name, entry] of Object.entries(diffdata)) {
+                    if (entry.new != entry.old) {
+                      const newObj = entry.new ? getRawObject(entry.new) : undefined;
+                      const oldObj = entry.old ? getRawObject(entry.old) : undefined;
+                      if (newObj instanceof Promise) {
+                        newObj.then(window.onhashchange);
+                        pending = true;
+                        break;
+                      }
+                      if (oldObj instanceof Promise) {
+                        oldObj.then(window.onhashchange);
+                        pending = true;
+                        break;
+                      }
+                      if (entry.mode == "40000") {
+                        const base_path = name ? name + "/" : "";
+                        if (newObj) {
+                          for (const entry of parseTree(newObj)) {
+                            if (!((base_path + entry.name) in diffdata)) {
+                              diffdata[base_path + entry.name] = { mode: entry.mode };
+                              updated = true;
+                            }
+                            diffdata[base_path + entry.name].new = entry.hash;
+                          }
+                        }
+                        if (oldObj) {
+                          for (const entry of parseTree(oldObj)) {
+                            if (!((base_path + entry.name) in diffdata)) {
+                              diffdata[base_path + entry.name] = { mode: entry.mode };
+                              updated = true;
+                            }
+                            diffdata[base_path + entry.name].old = entry.hash;
+                          }
+                        }
+                      }
+                    }
+                  }
+                } while (updated && !pending);
+                if (!pending) {
+                  for (const [name, entry] of Object.entries(diffdata)) {
+                    if (entry.mode != "40000" && entry.old != entry.new) {
+                      const card = document.createElement("div");
+                      card.className = "card mb-3";
+                      {
+                        const cardHeader = document.createElement("div");
+                        cardHeader.className = "card-header";
+                        cardHeader.textContent = name;
+                        card.appendChild(cardHeader);
+                      }
+                      {
+                        const pre = document.createElement("pre");
+                        pre.className = "m-3";
+                        pre.innerHTML = hljs.highlight(Diff.createPatch("", entry.old ? parseBlob(getRawObject(entry.old)) : "", entry.new ? parseBlob(getRawObject(entry.new)) : "").split("\n").slice(4).join("\n"), { language: "diff" }).value;
+                        card.appendChild(pre);
+                      }
+                      document.getElementById("diff-view").appendChild(card);
+                    }
+                  }
+                }
+              }
+            }
+            else {
+              document.getElementById("diff-btn").textContent = "Diff";
+              document.getElementById("file-view").classList.remove("d-none");
+              document.getElementById("diff-view").classList.add("d-none");
+
+              const choices = (params.get("path") ?? "").split("/");
+              let base_path = "";
+              let file;
+              for (const choice of choices) {
+                if (!choice) {
+                  continue;
+                }
+                const entry = parseTree(obj).find(x => x.name == choice);
+                if (!entry) {
+                  params.set("path", "");
+                  history.replaceState({}, "", "#" + params.toString());
+                  window.onhashchange();
+                  return;
+                }
+                if (entry.mode != "40000") {
+                  file = entry;
+                  break;
+                }
+                base_path += entry.name + "/";
+                obj = getRawObject(entry.hash);
+                if (obj instanceof Promise) {
+                  document.getElementById("filelist").innerHTML = "";
+                  document.getElementById("file-card").classList.add("d-none");
+                  obj.then(window.onhashchange);
+                  break;
+                }
+              }
+              if (!(obj instanceof Promise)) {
+                const files = parseTree(obj);
+                checkoutTree(files, base_path);
+                if (!file) {
+                  file = files.find(x => x.name == "README.md");
+                }
+                if (file) {
+                  document.getElementById("file-card").classList.remove("d-none");
+                  document.getElementById("file-name").textContent = file.name;
+                  document.getElementById("file-hash").textContent = file.hash;
+                  obj = getRawObject(file.hash);
+
+                  const arr = file.name.split(".");
+                  const language = arr[arr.length - 1];
+                  const parsable = (language == "md") && !(obj instanceof Promise);
+                  const showRaw = !parsable || window.mdraw;
+                  if (parsable) {
+                    document.getElementById("raw-span").classList.remove("d-none");
+                  }
+                  else {
+                    document.getElementById("raw-span").classList.add("d-none");
+                  }
+                  if (showRaw) {
+                    document.querySelector("#raw-span a").textContent = "Parsed";
+                    document.getElementById("file-data").classList.remove("d-none");
+                    document.getElementById("file-contents").classList.add("d-none");
+                  }
+                  else {
+                    document.querySelector("#raw-span a").textContent = "Raw";
+                    document.getElementById("file-data").classList.add("d-none");
+                    document.getElementById("file-contents").classList.remove("d-none");
+                  }
+
+                  if (obj instanceof Promise) {
+                    document.getElementById("file-data").textContent = "Loading...";
+                    obj.then(window.onhashchange);
+                  }
+                  else if (showRaw) {
+                    document.getElementById("file-data").innerHTML = hljs.highlight(parseBlob(obj), { language: hljs.getLanguage(language) ? language: "plaintext" }).value;
+                  }
+                  else {
+                    document.getElementById("file-contents").innerHTML = marked.parse(parseBlob(obj));
+                  }
+                }
+                else {
+                  document.getElementById("file-card").classList.add("d-none");
+                }
               }
             }
           }
@@ -282,17 +366,22 @@
 
     document.getElementById("ref").onchange = () => {
       location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value;
-      window.onhashchange();
     };
 
     document.getElementById("next-btn").onclick = () => {
       location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.next_commit;
-      window.onhashchange();
     };
 
     document.getElementById("prev-btn").onclick = () => {
       location.hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.prev_commit;
-      window.onhashchange();
+    };
+
+    document.getElementById("diff-btn").onclick = () => {
+      let hash = "repo=" + encodeURIComponent(document.getElementById("repo-url").value) + "&ref=" + document.getElementById("ref").value + "&commit=" + repo.commit_hash;
+      if (document.getElementById("diff-btn").textContent == "Diff") {
+        hash += "&diff=" + repo.prev_commit;
+      }
+      location.hash = hash; 
     };
 
     const rawObjects = {};
