@@ -6,6 +6,10 @@
   <link rel="stylesheet" href="vendor/bootstrap.min.css" />
   <link rel="stylesheet" href="vendor/atom-one-dark.min.css" />
   <style>
+    .card:has(#filelist):not(:has(tr)) {
+      display: none;
+    }
+
     #filelist tr:not(:last-child) {
       border-bottom: 1px solid var(--bs-border-color);
     }
@@ -24,8 +28,8 @@
       <span class="input-group-text">@</span>
       <input id="ref" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
     </div>
-    <div class="card overflow-hidden mb-3">
-      <div class="card-header d-flex align-items-center">
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center border-bottom-0">
         <b class="me-2" id="latest-author">Loading...</b>
         <span id="latest-message"></span>
         <div class="ms-auto">
@@ -35,11 +39,11 @@
           <button id="dl-btn" class="btn btn-outline-success btn-sm">Download ZIP</button>
         </div>
       </div>
-      <div>
-        <table class="table table-hover table-borderless mb-0">
-          <tbody id="filelist"></tbody>
-        </table>
-      </div>
+    </div>
+    <div class="card mb-3 overflow-hidden">
+      <table class="table table-hover table-borderless mb-0">
+        <tbody id="filelist"></tbody>
+      </table>
     </div>
     <div id="file-card" class="card mb-3 d-none">
       <div class="card-header d-flex">
@@ -168,6 +172,7 @@
           document.getElementById("latest-author").textContent = "Loading...";
           document.getElementById("latest-message").innerHTML = "";
           document.getElementById("filelist").innerHTML = "";
+          document.getElementById("file-card").classList.add("d-none");
           obj.then(window.onhashchange);
         }
         else {
