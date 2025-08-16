@@ -18,6 +18,23 @@
       padding-left: 1rem;
       padding-right: 1rem;
     }
+
+    .diff-add {
+      display: inline-block;
+      background: #84b06561;
+    }
+
+    .diff-sub {
+      display: inline-block;
+      background: #c1596161;
+    }
+
+    .diff-add .diff-add,
+    .diff-add .diff-sub,
+    .diff-sub .diff-sub,
+    .diff-sub .diff-add {
+      background: none;
+    }
   </style>
   <script><!-- https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer --></script>
 </head>
@@ -263,9 +280,25 @@
                         card.appendChild(cardHeader);
                       }
                       {
+                        const arr = name.split(".");
+                        const language = arr[arr.length - 1];
                         const pre = document.createElement("pre");
                         pre.className = "m-3";
-                        pre.innerHTML = hljs.highlight(Diff.createPatch("", entry.old ? parseBlob(getRawObject(entry.old)) : "", entry.new ? parseBlob(getRawObject(entry.new)) : "").split("\n").slice(4).join("\n"), { language: "diff" }).value;
+                        pre.innerHTML = hljs.highlight(Diff.createPatch("", entry.old ? parseBlob(getRawObject(entry.old)) : "", entry.new ? parseBlob(getRawObject(entry.new)) : "").split("\n").slice(4).join("\n"), { language: hljs.getLanguage(language) ? language: "plaintext" }).value.split("<span class=\"").join("<div class=\"d-inline ").split("</span>").join("</div>").split("\n").map(line => {
+                          if (line.startsWith("+")) {
+                            return `<span class="diff-add">${line}</span>`;
+                          }
+                          if (line.startsWith("-")) {
+                            return `<span class="diff-sub">${line}</span>`;
+                          }
+                          if (line.startsWith("@@ ")) {
+                            return `<span class="hljs-meta">${line.replace(/<div class="[^"]+">([^<]*)<\/div>/g, "$1")}</span>`;
+                          }
+                          if (line.startsWith("\\ ")) {
+                            return line.replace(/<div class="[^"]+">([^<]*)<\/div>/g, "$1");
+                          }
+                          return line;
+                        }).join("\n");
                         card.appendChild(pre);
                       }
                       document.getElementById("diff-view").appendChild(card);
