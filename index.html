@@ -43,16 +43,22 @@
     <div id="file-card" class="card mb-3 d-none">
       <div class="card-header d-flex">
         <span id="file-name"></span>
+        <span id="raw-span" class="d-none">&nbsp;(<a href="#" onclick="event.preventDefault();window.mdraw=!window.mdraw;window.onhashchange();">Raw</a>)</span>
         <code id="file-hash" class="ms-auto"></code>
       </div>
       <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
+      <div id="file-contents" class="m-3 d-none"></div>
     </div>
     <p id="status-text"></p>
   </div>
   <datalist id="refs-datalist"></datalist>
   <script src="git-parsers.js"></script>
   <script src="zip-slop.js"></script>
+  <script src="vendor/marked.js"></script>
+  <script src="vendor/marked-alert.js"></script>
   <script>
+    marked.use(markedAlert());
+
     const repo = {};
     window.onhashchange = (e) => {
       const params = new URLSearchParams(location.hash.replace("#", ""));
@@ -206,12 +212,35 @@
                 document.getElementById("file-name").textContent = file.name;
                 document.getElementById("file-hash").textContent = file.hash;
                 obj = getRawObject(file.hash);
+
+                const parsable = !(obj instanceof Promise) && (file.name.substr(file.name.length - 3) == ".md");
+                const showRaw = !parsable || window.mdraw;
+                if (parsable) {
+                  document.getElementById("raw-span").classList.remove("d-none");
+                }
+                else {
+                  document.getElementById("raw-span").classList.add("d-none");
+                }
+                if (showRaw) {
+                  document.querySelector("#raw-span a").textContent = "Parsed";
+                  document.getElementById("file-data").classList.remove("d-none");
+                  document.getElementById("file-contents").classList.add("d-none");
+                }
+                else {
+                  document.querySelector("#raw-span a").textContent = "Raw";
+                  document.getElementById("file-data").classList.add("d-none");
+                  document.getElementById("file-contents").classList.remove("d-none");
+                }
+
                 if (obj instanceof Promise) {
                   document.getElementById("file-data").textContent = "Loading...";
                   obj.then(window.onhashchange);
                 }
-                else {
+                else if (showRaw) {
                   document.getElementById("file-data").textContent = parseBlob(obj);
+                }
+                else {
+                  document.getElementById("file-contents").innerHTML = marked.parse(parseBlob(obj));
                 }
               }
               else {
