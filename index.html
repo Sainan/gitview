@@ -29,7 +29,7 @@
       <input id="ref" type="text" class="form-control" placeholder="HEAD" list="refs-datalist" />
     </div>
     <div class="card mb-3">
-      <div class="card-header d-flex align-items-center border-bottom-0">
+      <div class="card-header d-md-flex align-items-center border-bottom-0">
         <b class="me-2" id="latest-author">Loading...</b>
         <span id="latest-message"></span>
         <div class="ms-auto">
@@ -40,19 +40,25 @@
         </div>
       </div>
     </div>
-    <div class="card mb-3 overflow-hidden">
-      <table class="table table-hover table-borderless mb-0">
-        <tbody id="filelist"></tbody>
-      </table>
-    </div>
-    <div id="file-card" class="card mb-3 d-none">
-      <div class="card-header d-flex">
-        <span id="file-name"></span>
-        <span id="raw-span" class="d-none">&nbsp;(<a href="#" onclick="event.preventDefault();window.mdraw=!window.mdraw;window.onhashchange();">Raw</a>)</span>
-        <code id="file-hash" class="ms-auto"></code>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="card mb-3 overflow-hidden">
+          <table class="table table-hover table-borderless mb-0">
+            <tbody id="filelist"></tbody>
+          </table>
+        </div>
       </div>
-      <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
-      <div id="file-contents" class="m-3 d-none"></div>
+      <div class="col-md-9">
+        <div id="file-card" class="card mb-3 d-none">
+          <div class="card-header d-flex">
+            <span id="file-name"></span>
+            <span id="raw-span" class="d-none">&nbsp;(<a href="#" onclick="event.preventDefault();window.mdraw=!window.mdraw;window.onhashchange();">Raw</a>)</span>
+            <code id="file-hash" class="ms-auto text-truncate"></code>
+          </div>
+          <pre id="file-data" class="m-3" style="text-wrap:initial"></pre>
+          <div id="file-contents" class="m-3 d-none"></div>
+        </div>
+      </div>
     </div>
     <p id="status-text"></p>
   </div>
@@ -122,11 +128,6 @@
             repo.default_ref = default_ref;
             repo.refs = refs;
             document.getElementById("refs-datalist").innerHTML = "";
-            /*{
-              const option = document.createElement("option");
-              option.value = "HEAD";
-              document.getElementById("refs-datalist").appendChild(option);
-            }*/
             for (const [name, hash] of Object.entries(repo.refs)) {
               const option = document.createElement("option");
               option.value = name;
@@ -326,7 +327,6 @@
         const tr = document.createElement("tr");
         {
           const td = document.createElement("td");
-          td.setAttribute("colspan", 2);
           {
             const a = document.createElement("a");
             const arr = base_path.split("/");
@@ -352,17 +352,6 @@
               a.textContent += "/";
             }
             td.appendChild(a);
-          }
-          tr.appendChild(td);
-        }
-        {
-          const td = document.createElement("td");
-          td.classList = "text-end";
-          {
-            const code = document.createElement("code");
-            code.classList = "text-truncate";
-            code.textContent = file.hash;
-            td.appendChild(code);
           }
           tr.appendChild(td);
         }
