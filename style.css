@@ -1,0 +1,29 @@
+.card:has(#filelist):not(:has(tr)) {
+  display: none;
+}
+
+#filelist tr:not(:last-child) {
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+#filelist td {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.diff-add {
+  display: inline-block;
+  background: #84b06561;
+}
+
+.diff-sub {
+  display: inline-block;
+  background: #c1596161;
+}
+
+.diff-add .diff-add,
+.diff-add .diff-sub,
+.diff-sub .diff-sub,
+.diff-sub .diff-add {
+  background: none;
+}
