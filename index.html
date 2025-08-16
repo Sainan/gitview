@@ -142,17 +142,22 @@
           });
         }
       }
+      let ref_commit_hash = params.get("ref")?.length == 40 ? params.get("ref") : undefined;
+      repo.commit_hash = params.get("commit");
       if (!(repo.default_ref instanceof Promise) && !(repo.refs instanceof Promise)) {
-        let ref_commit_hash = params.get("ref");
-        if (ref_commit_hash?.length != 40) {
+        if (!ref_commit_hash) {
           ref_commit_hash = repo.refs[params.get("ref")] ?? repo.refs[repo.default_ref];
         }
-        repo.commit_hash = params.get("commit") ?? ref_commit_hash;
+        if (!repo.commit_hash) {
+          repo.commit_hash = ref_commit_hash;
+        }
+      }
+      if (repo.commit_hash) {
         document.getElementById("commit-hash").textContent = repo.commit_hash;
         document.getElementById("prev-btn").classList.add("d-none");
 
         document.getElementById("next-btn").classList.add("d-none");
-        if (ref_commit_hash != repo.commit_hash) {
+        if (ref_commit_hash != repo.commit_hash && ref_commit_hash) {
           let path_obj = getRawObject(ref_commit_hash);
           while (path_obj && !(path_obj instanceof Promise) && parseCommit(path_obj).parent != repo.commit_hash) {
             ref_commit_hash = parseCommit(path_obj).parent;
