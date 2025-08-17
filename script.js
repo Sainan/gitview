@@ -413,12 +413,11 @@ function getRawObject(hash) {
       }
       fetch(repo.url + "/objects/" + hash.substr(0, 2) + "/" + hash.substr(2)).then(async response => {
         if (response.status != 404) {
-          const data = new Uint8Array(
+          rawObjects[hash] = parseObjectHeader(new Uint8Array(
             await new Response(
               response.body.pipeThrough(new DecompressionStream("deflate")),
             ).arrayBuffer(),
-          );
-          rawObjects[hash] = parseObjectHeader(data);
+          ));
           delete pendingObjects[hash];
           updateStatus();
           return resolve(rawObjects[hash]);
