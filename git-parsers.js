@@ -17,10 +17,6 @@ function parseBlob(obj) {
 
 // AI-generated Git helpers. Would use Gitwit (https://github.com/PlutoLang/gitwit) but Pluto maybe a bit too heavy of a dependency right now.
 
-/**
- * Split a raw Git object into { type, size, body }.
- * raw: Uint8Array of "<type> <size>\0<body>"
- */
 function parseObjectHeader(raw) {
   let nul = 0;
   while (nul < raw.length && raw[nul] !== 0x00) nul++;
@@ -34,7 +30,7 @@ function parseObjectHeader(raw) {
 
   console.assert(Number.isFinite(size) && size === body.length);
 
-  return { type, size, body };
+  return { type, body };
 }
 
 const TYPE_NAMES = {
@@ -55,11 +51,6 @@ function sha1HexAt(bytes, offset) {
   return out;
 }
 
-/**
- * Binary-safe tree parser.
- * Accepts a Uint8Array body of a 'tree' object (NOT including the "<type> <size>\0" header).
- * Returns [{ mode, name, hash }, ...]
- */
 function parseTreeBody(body) {
   const files = [];
   let i = 0;
@@ -261,7 +252,7 @@ async function readPackObject(buf, offset, sorted_offsets) {
 
   const typeName = TYPE_NAMES[type];
   if (!typeName) throw new Error(`Unknown/unsupported typeid ${type}`);
-  return { type: typeName, size: length, body: data };
+  return { type: typeName, body: data };
 }
 
 function applyGitDelta(base, delta, expectedOutSize) {
