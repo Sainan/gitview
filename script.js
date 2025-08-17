@@ -59,6 +59,7 @@ window.onhashchange = (e) => {
     repo.default_ref = fetch(repo.url + "/HEAD")
       .then((x) => x.text())
       .then((x) => x.substr(5).trim());
+    repo.packs = undefined;
     if (repo.default_ref instanceof Promise || repo.refs instanceof Promise) {
       Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
         repo.default_ref = default_ref;
@@ -362,22 +363,80 @@ function getRawObject(hash) {
     return rawObjects[hash];
   }
   if (!(hash in pendingObjects)) {
-    pendingObjects[hash] = (async () => {
-      const response = await fetch(
-        repo.url + "/objects/" + hash.substr(0, 2) + "/" + hash.substr(2),
-      );
-      rawObjects[hash] = new Uint8Array(
-        await new Response(
-          response.body.pipeThrough(new DecompressionStream("deflate")),
-        ).arrayBuffer(),
-      );
-      delete pendingObjects[hash];
-      document.getElementById("status-text").innerHTML = Object.keys(pendingObjects).length ? "Downloading " + Object.keys(pendingObjects).map(x => "<code>" + x + "</code>").join(", ") + "..." : "";
-      return rawObjects[hash];
-    })();
-    document.getElementById("status-text").innerHTML = "Downloading " + Object.keys(pendingObjects).map(x => "<code>" + x + "</code>").join(", ") + "...";
+    pendingObjects[hash] = new Promise(async resolve => {
+      if (repo.packs) {
+        for (const [name, data] of Object.entries(repo.packs)) {
+          if (data.idx && !(data.idx instanceof Promise) && (hash in data.idx.offsets)) {
+            //console.log(`${hash} is in ${name}`);
+            if (!data.pack) {
+              data.pack = fetch(repo.url + "/objects/pack/" + name).then(x => x.arrayBuffer());
+            }
+            data.pack = await data.pack;
+            rawObjects[hash] = buildObject(await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets));
+            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash]));
+            delete pendingObjects[hash];
+            updateStatus();
+            return resolve(rawObjects[hash]);
+          }
+        }
+      }
+      fetch(repo.url + "/objects/" + hash.substr(0, 2) + "/" + hash.substr(2)).then(async response => {
+        if (response.status != 404) {
+          rawObjects[hash] = new Uint8Array(
+            await new Response(
+              response.body.pipeThrough(new DecompressionStream("deflate")),
+            ).arrayBuffer(),
+          );
+          delete pendingObjects[hash];
+          updateStatus();
+          return resolve(rawObjects[hash]);
+        }
+
+        if (!repo.packs) {
+          repo.packs = fetch(repo.url + "/objects/info/packs")
+            .then((x) => x.text())
+            .then((x) => {
+              const packs = {};
+              for (const line of x.split("\n")) {
+                if (line.startsWith("P ")) {
+                  packs[line.substr(2).trim()] = {};
+                }
+              }
+              return packs;
+            });
+        }
+        repo.packs = await repo.packs;
+
+        for (const name of Object.keys(repo.packs)) {
+          if (!repo.packs[name].idx) {
+            repo.packs[name].idx = fetch(repo.url + "/objects/pack/" + name.split(".pack").join(".idx")).then(x => x.arrayBuffer()).then(parseIdx);
+          }
+          repo.packs[name].idx = await repo.packs[name].idx;
+        }
+
+        for (const [name, data] of Object.entries(repo.packs)) {
+          if (hash in data.idx.offsets) {
+            //console.log(`${hash} is in ${name}`);
+            if (!data.pack) {
+              data.pack = fetch(repo.url + "/objects/pack/" + name).then(x => x.arrayBuffer());
+            }
+            data.pack = await data.pack;
+            rawObjects[hash] = buildObject(await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets));
+            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash]));
+            delete pendingObjects[hash];
+            updateStatus();
+            return resolve(rawObjects[hash]);
+          }
+        }
+      });
+    });
+    updateStatus();
   }
   return pendingObjects[hash];
+}
+
+function updateStatus() {
+  document.getElementById("status-text").innerHTML = Object.keys(pendingObjects).length ? "Fetching " + Object.keys(pendingObjects).map(x => "<code>" + x + "</code>").join(", ") + "..." : "";
 }
 
 function checkoutTree(tree, base_path) {
