@@ -17,6 +17,15 @@ marked.use({
   }
 });
 
+const hasLocalIpfsNode = new Promise(async resolve => {
+  try {
+    await fetch("http://localhost:8080/", { signal: AbortSignal.timeout(700) });
+    resolve(true);
+  } catch (e) {
+    resolve(false);
+  }
+});
+
 window.onhashchange = (e) => {
   const params = new URLSearchParams(location.hash.replace("#", ""));
 
@@ -44,35 +53,46 @@ window.onhashchange = (e) => {
     document.getElementById("filelist").innerHTML = "";
     document.getElementById("file-card").classList.add("d-none");
     repo.url = params.get("repo");
-    repo.refs = fetch(repo.url + "/info/refs")
-      .then((x) => x.text())
-      .then((x) => {
-        const refs = {};
-        for (const line of x.split("\n")) {
-          const [hash, name] = line.split("\t");
-          if (name) {
-            refs[name.trim()] = hash;
-          }
-        }
-        return refs;
-      })
-      .catch(async () => {
-        // Shitty workaround for https://github.com/ipfs/rainbow/issues/289
-        if (params.get("repo").startsWith("https://ipfs.io/ipns/")) {
-          const name = params.get("repo").substr(21);
-          const x = await (await queryDnslink(name)).text();
-          const res = /dnslink=([a-zA-Z0-9/]+)/.exec(x);
-          if (res) {
-            location.hash = "repo=" + encodeURIComponent("https://ipfs.io" + res[1]);
-          }
-        }
-      });
-    repo.default_ref = fetch(repo.url + "/HEAD")
-      .then((x) => x.text())
-      .then((x) => x.substr(5).trim());
+    repo.refs = undefined;
+    repo.default_ref = undefined;
     repo.packs = undefined;
-    if (repo.default_ref instanceof Promise || repo.refs instanceof Promise) {
-      Promise.all([repo.default_ref, repo.refs]).then(([default_ref, refs]) => {
+    (async () => {
+      if (repo.url.indexOf(".dweb.link") != -1) {
+        // Sadly we need this to make proper use of it, even with companion: https://github.com/ipfs/ipfs-companion/issues/1333
+        document.getElementById("latest-author").textContent = "Checking for local IPFS node...";
+        if (await hasLocalIpfsNode) {
+          document.getElementById("latest-author").textContent = "Loading...";
+          location.hash = "repo=" + repo.url.split("https://").join("http://").split(".dweb.link").join(".localhost:8080");
+          return;
+        }
+      }
+      const refs = fetch(repo.url + "/info/refs")
+        .then((x) => x.text())
+        .then((x) => {
+          const refs = {};
+          for (const line of x.split("\n")) {
+            const [hash, name] = line.split("\t");
+            if (name) {
+              refs[name.trim()] = hash;
+            }
+          }
+          return refs;
+        })
+        .catch(async () => {
+          // Shitty workaround for https://github.com/ipfs/rainbow/issues/289
+          if (params.get("repo").startsWith("https://ipfs.io/ipns/")) {
+            const name = params.get("repo").substr(21);
+            const x = await (await queryDnslink(name)).text();
+            const res = /dnslink=([a-zA-Z0-9/]+)/.exec(x);
+            if (res) {
+              location.hash = "repo=" + encodeURIComponent("https://ipfs.io" + res[1]);
+            }
+          }
+        });
+      const default_ref = fetch(repo.url + "/HEAD")
+        .then((x) => x.text())
+        .then((x) => x.substr(5).trim());
+      Promise.all([default_ref, refs]).then(([default_ref, refs]) => {
         repo.default_ref = default_ref;
         repo.refs = refs;
         document.getElementById("refs-datalist").innerHTML = "";
@@ -89,11 +109,11 @@ window.onhashchange = (e) => {
       }).catch(e => {
         document.getElementById("latest-author").textContent = e;
       });
-    }
+    })();
   }
   let ref_commit_hash = params.get("ref")?.length == 40 ? params.get("ref") : undefined;
   repo.commit_hash = params.get("commit");
-  if (!(repo.default_ref instanceof Promise) && !(repo.refs instanceof Promise)) {
+  if (repo.default_ref && repo.refs) {
     if (!ref_commit_hash) {
       ref_commit_hash = repo.refs[params.get("ref")] ?? repo.refs[repo.default_ref];
     }
