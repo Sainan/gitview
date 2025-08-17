@@ -183,7 +183,7 @@ async function readPackObject(buf, offset, sorted_offsets) {
   // offsets are in PACK order, so sort ascending and find the next one
   const idx = sorted_offsets.findIndex(o => o === offset);
   if (idx < 0) throw new Error("Offset not found in offsets table");
-  const nextOffset = (idx + 1 < sorted_offsets.length) ? sorted_offsets[idx + 1] : u8.length; // last object goes to EOF
+  const nextOffset = (idx + 1 < sorted_offsets.length) ? sorted_offsets[idx + 1] : (u8.length - 20);
 
   // --- parse header at `offset` ---
   let i = offset;
