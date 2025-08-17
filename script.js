@@ -24,9 +24,9 @@ window.onhashchange = (e) => {
     params.set("repo", "https://ipfs.io/ipns/k51qzi5uqu5dly54t5zpzvguulvaq16fdxn75t8icsoeyprjtu4ixg1dte14yn");
   }
   params.set("repo", params.get("repo").replace(/\/+$/, ""));
-  document.getElementById("repo-url").value = params.get("repo");
 
   if (e?.type == "hashchange") {
+    document.getElementById("repo-url").value = params.get("repo");
     document.getElementById("ref").value = params.get("ref");
   }
 
