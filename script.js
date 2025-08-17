@@ -25,7 +25,7 @@ window.onhashchange = (e) => {
   }
   params.set("repo", params.get("repo").replace(/\/+$/, ""));
 
-  if (e?.type == "hashchange") {
+  if (e?.type == "hashchange" || e == "initial") {
     document.getElementById("repo-url").value = params.get("repo");
     document.getElementById("ref").value = params.get("ref");
   }
@@ -490,7 +490,7 @@ function checkoutTree(tree, base_path) {
   }
 }
 
-window.onhashchange();
+window.onhashchange("initial");
 
 let downloadPending = false;
 document.getElementById("dl-btn").onclick = async () => {
