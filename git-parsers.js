@@ -1,21 +1,18 @@
 const tdUtf8 = new TextDecoder("utf-8");
 
-function parseCommit(raw) {
-  const { type, body } = parseObjectHeader(raw);
-  console.assert(type == "commit");
-  return parseCommitBody(body);
+function parseCommit(obj) {
+  console.assert(obj.type == "commit");
+  return parseCommitBody(obj.body);
 }
 
-function parseTree(raw) {
-  const { type, body } = parseObjectHeader(raw);
-  console.assert(type == "tree");
-  return parseTreeBody(body);
+function parseTree(obj) {
+  console.assert(obj.type == "tree");
+  return parseTreeBody(obj.body);
 }
 
-function parseBlob(raw) {
-  const { type, body } = parseObjectHeader(raw);
-  console.assert(type == "blob");
-  return tdUtf8.decode(body);
+function parseBlob(obj) {
+  console.assert(obj.type == "blob");
+  return tdUtf8.decode(obj.body);
 }
 
 // AI-generated Git helpers. Would use Gitwit (https://github.com/PlutoLang/gitwit) but Pluto maybe a bit too heavy of a dependency right now.
@@ -39,6 +36,12 @@ function parseObjectHeader(raw) {
 
   return { type, size, body };
 }
+
+const TYPE_NAMES = {
+  1: "commit",
+  2: "tree",
+  3: "blob",
+};
 
 /**
  * Convert 20 bytes at offset to a 40-hex SHA-1 string.
@@ -211,11 +214,8 @@ async function readPackObject(buf, offset, sorted_offsets) {
       dist = ((dist + 1) << 7) + (byte & 0x7f);
     }
     const baseOffset = offset - dist;
-    //console.log("Delta, base at " + baseOffset);
     base = await readPackObject(buf, baseOffset, sorted_offsets);
-    //console.log(base);
-  }
-  else if (type == 7) {
+  } else if (type == 7) {
     throw new Error(`OBJ_REF_DELTA is not supported right now`);
   }
 
@@ -223,7 +223,7 @@ async function readPackObject(buf, offset, sorted_offsets) {
   // This avoids the “junk after end” error.
   const compressedSlice = u8.subarray(i, nextOffset);
   const ds = new DecompressionStream("deflate");
-  const reader = ds.readable.getReader()
+  const reader = ds.readable.getReader();
   const writer = ds.writable.getWriter();
 
   const readPromise = (async () => {
@@ -252,10 +252,13 @@ async function readPackObject(buf, offset, sorted_offsets) {
 
   let data = await readPromise;
   if (type == 6) {
-    type = base.typeid;
-    data = applyGitDelta(base.raw_data, data, length);
+    data = applyGitDelta(base.body, data, length);
+    return { type: base.type, size: length, body: data };
   }
-  return { typeid: type, raw_data: data };
+
+  const typeName = TYPE_NAMES[type];
+  if (!typeName) throw new Error(`Unknown/unsupported typeid ${type}`);
+  return { type: typeName, size: length, body: data };
 }
 
 function applyGitDelta(base, delta, expectedOutSize) {
@@ -338,20 +341,3 @@ function applyGitDelta(base, delta, expectedOutSize) {
   return out;
 }
 
-const TYPE_NAMES = {
-  1: "commit",
-  2: "tree",
-  3: "blob",
-};
-
-function buildObject({ typeid, raw_data }) {
-  const type = TYPE_NAMES[typeid];
-  if (!type) throw new Error(`Unknown/unsupported typeid ${typeid}`);
-  const header = `${type} ${raw_data.length}\0`;
-  const enc = new TextEncoder();
-  const headBytes = enc.encode(header);
-  const out = new Uint8Array(headBytes.length + raw_data.length);
-  out.set(headBytes, 0);
-  out.set(raw_data, headBytes.length);
-  return out;
-}
