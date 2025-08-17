@@ -55,6 +55,17 @@ window.onhashchange = (e) => {
           }
         }
         return refs;
+      })
+      .catch(async () => {
+        // Shitty workaround for https://github.com/ipfs/rainbow/issues/289
+        if (params.get("repo").startsWith("https://ipfs.io/ipns/")) {
+          const name = params.get("repo").substr(21);
+          const x = await (await queryDnslink(name)).text();
+          const res = /dnslink=([a-zA-Z0-9/]+)/.exec(x);
+          if (res) {
+            location.hash = "repo=" + encodeURIComponent("https://ipfs.io" + res[1]);
+          }
+        }
       });
     repo.default_ref = fetch(repo.url + "/HEAD")
       .then((x) => x.text())
