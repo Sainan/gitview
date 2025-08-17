@@ -214,8 +214,11 @@ async function readPackObject(buf, offset, sorted_offsets) {
       dist = ((dist + 1) << 7) + (byte & 0x7f);
     }
     const baseOffset = offset - dist;
+    //console.log("Delta, base at " + baseOffset);
     base = await readPackObject(buf, baseOffset, sorted_offsets);
-  } else if (type == 7) {
+    //console.log(base);
+  }
+  else if (type == 7) {
     throw new Error(`OBJ_REF_DELTA is not supported right now`);
   }
 
