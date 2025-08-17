@@ -403,8 +403,8 @@ function getRawObject(hash) {
               data.pack = fetch(repo.url + "/objects/pack/" + name).then(x => x.arrayBuffer());
             }
             data.pack = await data.pack;
-            rawObjects[hash] = buildObject(await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets));
-            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash]));
+            rawObjects[hash] = await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets);
+            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash].body));
             delete pendingObjects[hash];
             updateStatus();
             return resolve(rawObjects[hash]);
@@ -413,11 +413,11 @@ function getRawObject(hash) {
       }
       fetch(repo.url + "/objects/" + hash.substr(0, 2) + "/" + hash.substr(2)).then(async response => {
         if (response.status != 404) {
-          rawObjects[hash] = new Uint8Array(
+          rawObjects[hash] = parseObjectHeader(new Uint8Array(
             await new Response(
               response.body.pipeThrough(new DecompressionStream("deflate")),
             ).arrayBuffer(),
-          );
+          ));
           delete pendingObjects[hash];
           updateStatus();
           return resolve(rawObjects[hash]);
@@ -452,8 +452,8 @@ function getRawObject(hash) {
               data.pack = fetch(repo.url + "/objects/pack/" + name).then(x => x.arrayBuffer());
             }
             data.pack = await data.pack;
-            rawObjects[hash] = buildObject(await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets));
-            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash]));
+            rawObjects[hash] = await readPackObject(data.pack, data.idx.offsets[hash], data.idx.sorted_offsets);
+            //console.log(new TextDecoder("utf-8").decode(rawObjects[hash].body));
             delete pendingObjects[hash];
             updateStatus();
             return resolve(rawObjects[hash]);
