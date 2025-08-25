@@ -238,9 +238,11 @@ window.onhashchange = (e) => {
                 }
               }
             } while (updated && !pending);
-            if (!pending) {
-              for (const [name, entry] of Object.entries(diffdata)) {
-                if (entry.mode != "40000" && entry.old != entry.new) {
+            for (const [name, entry] of Object.entries(diffdata)) {
+              if (entry.mode != "40000" && entry.old != entry.new) {
+                const newObj = entry.new ? getRawObject(entry.new) : undefined;
+                const oldObj = entry.old ? getRawObject(entry.old) : undefined;
+                if (!(newObj instanceof Promise) && !(oldObj instanceof Promise)) {
                   const card = document.createElement("div");
                   card.className = "card mb-3";
                   {
